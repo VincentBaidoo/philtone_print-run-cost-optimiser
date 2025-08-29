@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Print Run Cost Optimiser — Updated</title>
+  <style>
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:18px;color:#0f172a;padding-top:30px}
+    h1{font-size:20px;margin-bottom:6px}
+    label{font-size:13px}
+    table{border-collapse:collapse;width:100%;margin-top:8px}
+    th,td{border:1px solid #e6e9ef;padding:6px;text-align:left;font-size:13px}
+    input[type=text], input[type=number], select{padding:6px;border:1px solid #cbd5e1;border-radius:6px;width:100%}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#0ea5a4;color:white;cursor:pointer}
+    .muted{color:#64748b;font-size:13px}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    .panel{border:1px solid #e6e9ef;padding:12px;border-radius:10px;margin-top:10px;background:#fbfdff}
+    .small{font-size:12px;color:#475569}
+    .note{font-size:12px;color:#334155;margin-top:8px}
+    .mono{font-family:monospace;font-size:13px}
+    .plate-canvas{border:1px solid #ccc; background-color: #f9f9f9; margin-top: 8px;}
+
+    .logo-container { position: absolute; top: 10px; left: 10px; z-index: 1000; }
+    .logo-container img { height: 40px; width: auto; opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="logo-container">
+    <img src="https://philtone.co.uk/wp-content/uploads/2023/07/logo.png" alt="Company Logo" />
+  </div>
+
+  <h1>Print-run Cost Optimiser</h1>
+  <p class="muted">Created by <b>Vincent Baidoo</b>.</p>
+
+  <div class="panel">
+    <div class="row">
+      <div class="col">
+        <label>Plate setup cost (per plate)</label>
+        <input id="plateSetupCost" type="number" min="0" step="0.01" value="50" />
+      </div>
+      <div class="col">
+        <label>Units</label>
+        <select id="units">
+          <option value="mm">mm</option>
+          <option value="in">inches</option>
+        </select>
+      </div>
+    </div>
+
+    <h3 style="margin-top:12px">Plate size</h3>
+    <div class="row">
+      <div class="col"><label>Plate width</label><input id="plateWidth" type="number" min="0" step="0.1" value="700"/></div>
+      <div class="col"><label>Plate height</label><input id="plateHeight" type="number" min="0" step="0.1" value="500"/></div>
+      <div class="col"><label><input type="checkbox" id="allowRotate"/> Allow rotation of individual pages</label></div>
+    </div>
+
+    <h3 style="margin-top:12px">Bleed margins </h3>
+    <div class="row">
+      <div class="col"><label>Bleed left</label><input id="bleedLeft" type="number" step="0.1" value="5"/></div>
+      <div class="col"><label>Bleed right</label><input id="bleedRight" type="number" step="0.1" value="5"/></div>
+      <div class="col"><label>Bleed top</label><input id="bleedTop" type="number" step="0.1" value="5"/></div>
+      <div class="col"><label>Bleed bottom</label><input id="bleedBottom" type="number" step="0.1" value="5"/></div>
+    </div>
+
+    <h3 style="margin-top:12px">Materials (each plate must use a single material)</h3>
+    <table id="materialsTable">
+      <thead><tr><th>Material</th><th>Cost per sheet (material)</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><input value="Coated" class="materialName"/></td><td><input value="0.05" class="materialCost"/></td><td><button onclick="removeMaterialRow(this)">Remove</button></td></tr>
+        <tr><td><input value="Uncoated" class="materialName"/></td><td><input value="0.04" class="materialCost"/></td><td><button onclick="removeMaterialRow(this)">Remove</button></td></tr>
+      </tbody>
+    </table>
+    <button style="margin-top:8px" onclick="addMaterialRow()">+ Add material</button>
+
+    <h3 style="margin-top:12px">Pages </h3>
+    <table id="pagesTable">
+      <thead><tr><th>Page name</th><th>Material</th><th>Qty</th><th>Width</th><th>Height</th><th>Cost / impression</th><th></th></tr></thead>
+      <tbody>
+        <tr>
+          <td><input class="pageName" value="Cover"/></td>
+          <td><input class="pageMaterial" value="Coated"/></td>
+          <td><input type="number" class="pageQty" value="1200" min="0"/></td>
+          <td><input type="number" class="pageW" value="210" step="0.1"/></td>
+          <td><input type="number" class="pageH" value="297" step="0.1"/></td>
+          <td><input type="number" class="pageInk" value="0.02" step="0.0001"/></td>
+          <td><button onclick="removePageRow(this)">Remove</button></td>
+        </tr>
+        <tr>
+          <td><input class="pageName" value="Inner1"/></td>
+          <td><input class="pageMaterial" value="Uncoated"/></td>
+          <td><input type="number" class="pageQty" value="1000" min="0"/></td>
+          <td><input type="number" class="pageW" value="210" step="0.1"/></td>
+          <td><input type="number" class="pageH" value="297" step="0.1"/></td>
+          <td><input type="number" class="pageInk" value="0.015" step="0.0001"/></td>
+          <td><button onclick="removePageRow(this)">Remove</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <button style="margin-top:8px" onclick="addPageRow()">+ Add page</button>
+
+    <h3 style="margin-top:12px">Cost calculation method</h3>
+    <div class="row">
+      <div class="col">
+        <label>Method</label>
+        <select id="costMethod">
+          <option value="heuristic">Quick Calculation</option>
+          <option value="wasteAware">Waste-Aware Calculation</option>
+          <option value="globalSim">Advanced Calculation</option>
+        </select>
+      </div>
+      <div class="col">
+        <label>Depth Attempts (Advanced Calculation Only)</label>
+        <input id="simDepth" type="number" min="1" max="5" step="1" value="2" />
+      </div>
+    </div>
+
+    <div style="margin-top:12px"><button onclick="optimise()">Optimise for lowest cost</button></div>
+    <div id="status" class="note"></div>
+  </div>
+
+  <div id="output" class="panel" style="display:none;margin-top:12px"></div>
+
+  <script>
+    // ---- UI helpers
+    function addMaterialRow(){ const tbody = document.querySelector('#materialsTable tbody'); const tr=document.createElement('tr'); tr.innerHTML='<td><input class="materialName" value="NewMat"/></td><td><input class="materialCost" value="0.03"/></td><td><button onclick="removeMaterialRow(this)">Remove</button></td>'; tbody.appendChild(tr);} 
+    function removeMaterialRow(btn){ btn.closest('tr').remove(); }
+    function addPageRow(){ const tbody=document.querySelector('#pagesTable tbody'); const tr=document.createElement('tr'); tr.innerHTML=`<td><input class='pageName' value='Page${tbody.children.length+1}'/></td><td><input class='pageMaterial' value='Coated'/></td><td><input type='number' class='pageQty' value='500' min='0'/></td><td><input class='pageW' type='number' step='0.1' value='210'/></td><td><input class='pageH' type='number' step='0.1' value='297'/></td><td><input class='pageInk' type='number' step='0.0001' value='0.02'/></td><td><button onclick='removePageRow(this)'>Remove</button></td>`; tbody.appendChild(tr);} 
+    function removePageRow(btn){ btn.closest('tr').remove(); }
+
+    function collectMaterials(){ const rows = Array.from(document.querySelectorAll('#materialsTable tbody tr')); const map={}; rows.forEach(r=>{ const name=r.querySelector('.materialName').value.trim(); const cost=parseFloat(r.querySelector('.materialCost').value)||0; if(name) map[name]=cost; }); return map; }
+    function collectPages(){ const rows = Array.from(document.querySelectorAll('#pagesTable tbody tr')); return rows.map((r,idx)=>({
+      id: idx,
+      name: r.querySelector('.pageName').value.trim()||`P${idx+1}`,
+      material: r.querySelector('.pageMaterial').value.trim()||'Default',
+      qty: Math.max(0.001, Math.floor(parseFloat(r.querySelector('.pageQty').value)||0)),
+      w: Math.max(0.001, parseFloat(r.querySelector('.pageW').value)||0.001),
+      h: Math.max(0.001, parseFloat(r.querySelector('.pageH').value)||0.001),
+      ink: Math.max(0, parseFloat(r.querySelector('.pageInk').value)||0)
+    })); }
+
+    // ---- Guillotine packer (unchanged) ----
+    function canPackSet(rects, plateW, plateH, allowRotate){
+      const freeRectsStart = [{x:0, y:0, w:plateW, h:plateH}];
+      const items = rects.map((r,idx)=>({...r, originalIndex: idx})).sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h));
+      const solution = [];
+
+      function placeRecursive(freeRects, remaining){
+        if(remaining.length===0) return true;
+        const item = remaining[0];
+        for(let fi=0; fi<freeRects.length; fi++){
+          const fr = freeRects[fi];
+          if(item.w <= fr.w + 1e-9 && item.h <= fr.h + 1e-9){
+            const newFree = freeRects.slice(); newFree.splice(fi,1);
+            const right = {x: fr.x + item.w, y: fr.y, w: fr.w - item.w, h: item.h};
+            const bottom = {x: fr.x, y: fr.y + item.h, w: fr.w, h: fr.h - item.h};
+            if(right.w > 1e-9 && right.h > 1e-9) newFree.push(right);
+            if(bottom.w > 1e-9 && bottom.h > 1e-9) newFree.push(bottom);
+            solution.push({x: fr.x, y: fr.y, w: item.w, h: item.h, rotated: false, originalIndex: item.originalIndex});
+            if(placeRecursive(newFree, remaining.slice(1))) return true;
+            solution.pop();
+          }
+          if(allowRotate && item.h <= fr.w + 1e-9 && item.w <= fr.h + 1e-9){
+            const newFree = freeRects.slice(); newFree.splice(fi,1);
+            const right = {x: fr.x + item.h, y: fr.y, w: fr.w - item.h, h: item.w};
+            const bottom = {x: fr.x, y: fr.y + item.w, w: fr.w, h: fr.h - item.w};
+            if(right.w > 1e-9 && right.h > 1e-9) newFree.push(right);
+            if(bottom.w > 1e-9 && bottom.h > 1e-9) newFree.push(bottom);
+            solution.push({x: fr.x, y: fr.y, w: item.h, h: item.w, rotated: true, originalIndex: item.originalIndex});
+            if(placeRecursive(newFree, remaining.slice(1))) return true;
+            solution.pop();
+          }
+        }
+        return false;
+      }
+      solution.length = 0;
+      const success = placeRecursive(freeRectsStart, items);
+      if (success) {
+        const finalPacking = rects.map((r,idx) => {
+          const packedItem = solution.find(s => s.originalIndex === idx);
+          return {
+            name: r.name,
+            w: packedItem.w,
+            h: packedItem.h,
+            x: packedItem.x,
+            y: packedItem.y,
+            rotated: packedItem.rotated
+          };
+        });
+        return { success: true, packing: finalPacking };
+      }
+      return { success: false, packing: null };
+    }
+
+    // ---- Plate builder with material-per-sheet included in plate cost
+    // plateTotalCost = plateSetupCost + materialCost_perSheet * S + inkCostForPlate
+    // Candidate selection minimises costPerAssigned = plateTotalCost / totalAssigned (heuristic)
+    // New: supports multiple selection strategies: heuristic, wasteAware, globalSim
+    function createPlatesForGroup(group, availW, availH, allowRotate, plateSetupCost, materialCostPerSheet, costMethod, simDepth){
+      const remaining = group.map(p => ({ ...p, rem: p.qty }));
+      const plates = [];
+
+      // impossibility check
+      for(const r of remaining){
+        const fitsDirect = (r.w <= availW + 1e-9 && r.h <= availH + 1e-9);
+        const fitsRot = allowRotate && (r.h <= availW + 1e-9 && r.w <= availH + 1e-9);
+        if(!fitsDirect && !fitsRot){
+          return { error: `Page "${r.name}" (${r.w.toFixed(1)}x${r.h.toFixed(1)}) doesn't fit the available plate area.`};
+        }
+      }
+
+      // helper: simulate greedy continuation (used by globalSim)
+      function greedySim(remainingSim, depth){
+        // shallow greedy that returns total cost estimate
+        let total = 0;
+        const remCopy = remainingSim.map(r=>({...r}));
+        while(remCopy.some(r=>r.rem>0)){
+          remCopy.sort((a,b)=>b.rem - a.rem);
+          const base = remCopy.find(r=>r.rem>0);
+          if(!base) break;
+          const gridA = Math.floor(availW / base.w) * Math.floor(availH / base.h);
+          const gridB = Math.floor(availW / base.h) * Math.floor(availH / base.w);
+          let maxCopies = Math.max(1, Math.max(gridA, gridB));
+          maxCopies = Math.min(maxCopies, base.rem);
+          const maxTry = Math.min(maxCopies, 25);
+
+          let bestCandidateLocal = null;
+
+          for(let m = maxTry; m>=1; m--){
+            const baseRects = Array.from({length:m}, ()=>({w: base.w, h: base.h, name: base.name}));
+            let rects = baseRects.slice();
+            const others = remCopy.slice().filter(r=>r!==base && r.rem>0).sort((a,b)=>b.rem-a.rem);
+            for(const o of others){
+              const tryRects = rects.concat([{w:o.w,h:o.h,name:o.name}]);
+              const packTry = canPackSet(tryRects, availW, availH, allowRotate);
+              if(packTry.success) rects = tryRects;
+            }
+            const packRes = canPackSet(rects, availW, availH, allowRotate);
+            if(!packRes.success) continue;
+            const positions = {};
+            for(const r of rects) positions[r.name] = (positions[r.name] || 0) + 1;
+            const posBase = positions[base.name] || 0;
+            if(posBase===0) continue;
+            const S = Math.ceil(base.rem / posBase);
+
+            let totalAssigned = 0; let totalPrintedImpressions = 0; let inkCostForPlate = 0;
+            for(const name in positions){
+              const pos = positions[name];
+              const remObj = remCopy.find(r=>r.name===name);
+              const printed = S * pos;
+              const assigned = Math.min(printed, remObj ? remObj.rem : 0);
+              totalAssigned += assigned;
+              totalPrintedImpressions += printed;
+              inkCostForPlate += (remObj ? remObj.ink : 0) * printed;
+            }
+            if(totalAssigned<=0) continue;
+            const materialCostForPlate = materialCostPerSheet * S;
+            const plateTotalCost = plateSetupCost + materialCostForPlate + inkCostForPlate;
+            const candidate = { S, positions, totalAssigned, totalPrintedImpressions, inkCostForPlate, plateTotalCost };
+            if(!bestCandidateLocal || candidate.plateTotalCost/bestCandidateLocal.totalAssigned < bestCandidateLocal.plateTotalCost/bestCandidateLocal.totalAssigned){
+              bestCandidateLocal = candidate;
+            }
+          }
+
+          if(!bestCandidateLocal){
+            // fallback single
+            const singlePack = canPackSet([{w:base.w,h:base.h,name:base.name}], availW, availH, allowRotate);
+            const S = Math.ceil(base.rem/1);
+            const printed = S*1;
+            const assigned = Math.min(printed, base.rem);
+            const inkCostForPlate = printed * base.ink;
+            const materialCostForPlate = materialCostPerSheet * S;
+            const plateTotalCost = plateSetupCost + materialCostForPlate + inkCostForPlate;
+            total += plateTotalCost;
+            base.rem -= assigned;
+            continue;
+          }
+
+          // consume
+          for(const name in bestCandidateLocal.positions){
+            const pos = bestCandidateLocal.positions[name];
+            const remObj = remCopy.find(r=>r.name===name);
+            const printed = bestCandidateLocal.S * pos;
+            const assigned = Math.min(printed, remObj ? remObj.rem : 0);
+            if(remObj) remObj.rem -= assigned;
+          }
+          total += bestCandidateLocal.plateTotalCost;
+        }
+        return total;
+      }
+
+      while(remaining.some(r => r.rem > 0)){
+        remaining.sort((a,b)=>b.rem - a.rem);
+        const base = remaining.find(r=>r.rem > 0);
+        if(!base) break;
+
+        // estimate maximum copies of base that fit (grid upper bound)
+        const gridA = Math.floor(availW / base.w) * Math.floor(availH / base.h);
+        const gridB = Math.floor(availW / base.h) * Math.floor(availH / base.w);
+        let maxCopies = Math.max(1, Math.max(gridA, gridB));
+        maxCopies = Math.min(maxCopies, base.rem);
+        const maxTry = Math.min(maxCopies, 25);
+
+        let bestCandidate = null;
+
+        for(let m = maxTry; m >= 1; m--){
+          const baseRects = Array.from({length: m}, ()=>({w: base.w, h: base.h, name: base.name}));
+          let rects = baseRects.slice();
+
+          const others = remaining.slice().filter(r=>r !== base && r.rem > 0).sort((a,b)=>b.rem - a.rem);
+          for(const o of others){
+            const tryRects = rects.concat([{w: o.w, h: o.h, name: o.name}]);
+            const packTry = canPackSet(tryRects, availW, availH, allowRotate);
+            if(packTry.success) rects = tryRects;
+          }
+
+          const packRes = canPackSet(rects, availW, availH, allowRotate);
+          if(!packRes.success) continue;
+
+          // count positions
+          const positions = {};
+          for(const r of rects) positions[r.name] = (positions[r.name] || 0) + 1;
+          const posBase = positions[base.name] || 0;
+          if(posBase === 0) continue;
+
+          const S = Math.ceil(base.rem / posBase); // sheets to run for this plate
+
+          // compute printedImpressions per page (S * pos) and assigned (min)
+          let totalAssigned = 0;
+          let totalPrintedImpressions = 0;
+          let inkCostForPlate = 0;
+          for(const name in positions){
+            const pos = positions[name];
+            const remObj = remaining.find(r=>r.name === name);
+            const rem = remObj ? remObj.rem : 0;
+            const printed = S * pos; // printed impressions for that page
+            const assigned = Math.min(printed, rem);
+            totalAssigned += assigned;
+            totalPrintedImpressions += printed;
+            const inkCost = (remObj ? remObj.ink : 0) * printed;
+            inkCostForPlate += inkCost;
+          }
+
+          // NEW: material cost is per sheet * S (not a flat per-plate)
+          const materialCostForPlate = materialCostPerSheet * S;
+          const plateTotalCost = plateSetupCost + materialCostForPlate + inkCostForPlate;
+
+          if(totalAssigned <= 0) continue;
+
+          const wasteImpressions = totalPrintedImpressions - totalAssigned;
+
+          // candidate data
+          const candidate = {
+            m, rects, packRes, positions, S, totalAssigned, totalPrintedImpressions, inkCostForPlate, plateTotalCost, materialCostForPlate, wasteImpressions
+          };
+
+          // scoring according to chosen method
+          if(!bestCandidate){
+            bestCandidate = candidate;
+            continue;
+          }
+
+          function scoreCandidate(cand){
+            // base: cost per assigned impression (includes waste because inkCostForPlate uses printed)
+            const baseScore = cand.plateTotalCost / cand.totalAssigned;
+            if(costMethod === 'heuristic') return baseScore;
+            if(costMethod === 'wasteAware'){
+              // compute waste money (ink waste + proportional material waste)
+              const wasteInkCost = cand.inkCostForPlate - (function(){
+                // sum assigned * respective ink
+                let s = 0; for(const name in cand.positions){ const pos = cand.positions[name]; const remObj = remaining.find(r=>r.name===name); const assigned = Math.min(cand.S * pos, remObj ? remObj.rem : 0); s += assigned * (remObj?remObj.ink:0);} return s; })();
+              const wasteMaterialCost = cand.materialCostForPlate * (cand.wasteImpressions / Math.max(1, cand.totalPrintedImpressions));
+              const wasteMoney = wasteInkCost + wasteMaterialCost;
+              // prefer lower cost per assigned, but penalise waste heavily
+              return baseScore + wasteMoney / Math.max(1, cand.totalAssigned);
+            }
+            if(costMethod === 'globalSim'){
+              // simulate greedy continuation after applying this candidate and return total estimated cost
+              // create copy of remaining and apply assignments
+              const remCopy = remaining.map(r=>({...r}));
+              for(const name in cand.positions){
+                const pos = cand.positions[name];
+                const remObj = remCopy.find(r=>r.name===name);
+                if(remObj){
+                  const printed = cand.S * pos;
+                  const assigned = Math.min(printed, remObj.rem);
+                  remObj.rem -= assigned;
+                }
+              }
+              // estimate remaining cost via greedySim (depth not used in this simple sim, but could control more expensive branching)
+              const futureCost = greedySim(remCopy, simDepth);
+              return cand.plateTotalCost + futureCost; // lower total is better
+            }
+            return baseScore;
+          }
+
+          const bestScore = scoreCandidate(bestCandidate);
+          const candScore = scoreCandidate(candidate);
+
+          // for globalSim lower is better (absolute total cost). For other methods the score is per-assigned so lower better too.
+          const preferCandidate = candScore < bestScore - 1e-12 || (Math.abs(candScore-bestScore) < 1e-12 && candidate.totalAssigned > bestCandidate.totalAssigned);
+          if(preferCandidate) bestCandidate = candidate;
+        } // end m loop
+
+        if(!bestCandidate){
+          const singlePack = canPackSet([{w: base.w, h: base.h, name: base.name}], availW, availH, allowRotate);
+          if(!singlePack.success) return { error: `Could not pack page "${base.name}" even on single plate.`};
+          const S = Math.ceil(base.rem / 1);
+          const printed = S * 1;
+          const assigned = Math.min(printed, base.rem);
+          const inkCostForPlate = printed * base.ink;
+          const materialCostForPlate = materialCostPerSheet * S;
+          const plateTotalCost = plateSetupCost + materialCostForPlate + inkCostForPlate;
+          plates.push({ pages: [{name: base.name, positions:1, assigned, remBefore: base.rem, w: base.w, h: base.h, ink: base.ink }], runQty: S, packing: singlePack.packing, plateTotalCost, inkCostForPlate, materialCostForPlate, wasteImpressions: printed-assigned });
+          base.rem -= assigned;
+          continue;
+        }
+
+        // consume assigned amounts and record plate
+        const platePages = [];
+        for(const name in bestCandidate.positions){
+          const pos = bestCandidate.positions[name];
+          const remObj = remaining.find(r=>r.name === name);
+          const printed = bestCandidate.S * pos;
+          const assigned = Math.min(printed, remObj ? remObj.rem : 0);
+          const remBefore = remObj ? remObj.rem : 0;
+          if(remObj) remObj.rem -= assigned;
+          const orig = group.find(g=>g.name === name);
+          platePages.push({ name, positions: pos, assigned, remBefore, w: orig ? orig.w : 0, h: orig ? orig.h : 0, ink: orig ? orig.ink : 0 });
+        }
+
+        plates.push({ pages: platePages, runQty: bestCandidate.S, packing: bestCandidate.packRes.packing, plateTotalCost: bestCandidate.plateTotalCost, inkCostForPlate: bestCandidate.inkCostForPlate, materialCostForPlate: bestCandidate.materialCostForPlate, wasteImpressions: bestCandidate.wasteImpressions });
+      } // while remaining
+
+      return { plates };
+    }
+
+    function optimise(){
+      const units = document.getElementById('units').value;
+      let plateW = parseFloat(document.getElementById('plateWidth').value) || 0;
+      let plateH = parseFloat(document.getElementById('plateHeight').value) || 0;
+      const allowRotate = document.getElementById('allowRotate').checked;
+      if(units === 'in'){ const conv=25.4; plateW *= conv; plateH *= conv; }
+
+      let bleedLeft = parseFloat(document.getElementById('bleedLeft').value) || 0;
+      let bleedRight = parseFloat(document.getElementById('bleedRight').value) || 0;
+      let bleedTop = parseFloat(document.getElementById('bleedTop').value) || 0;
+      let bleedBottom = parseFloat(document.getElementById('bleedBottom').value) || 0;
+      if(units === 'in'){
+        const conv = 25.4;
+        bleedLeft *= conv; bleedRight *= conv; bleedTop *= conv; bleedBottom *= conv;
+      }
+      const availW = Math.max(0.0001, plateW - bleedLeft - bleedRight);
+      const availH = Math.max(0.0001, plateH - bleedTop - bleedBottom);
+
+      const plateSetupCost = parseFloat(document.getElementById('plateSetupCost').value) || 0;
+      const materials = collectMaterials();
+      const pages = collectPages().filter(p=>p.qty>0);
+      const status = document.getElementById('status'); status.textContent = 'Optimising...';
+
+      const byMat = {};
+      pages.forEach(p=>{
+        const factor = (units==='in')?25.4:1;
+        const pcopy = Object.assign({}, p, { w: p.w * factor, h: p.h * factor });
+        if(!byMat[p.material]) byMat[p.material] = [];
+        byMat[p.material].push(pcopy);
+      });
+
+      const costMethod = document.getElementById('costMethod').value;
+      const simDepth = Math.max(1, parseInt(document.getElementById('simDepth').value)||1);
+
+      const outputDiv = document.getElementById('output'); outputDiv.style.display='block'; outputDiv.innerHTML='';
+      let grandTotalCost=0, grandTotalPrintedImpressions=0, grandTotalWaste=0, grandTotalPlates=0, grandWasteMoney=0;
+
+      for(const mat of Object.keys(byMat)){
+        const group = byMat[mat];
+        // materialCostPerSheet is read from material table
+        const materialCostPerSheet = materials[mat] !== undefined ? parseFloat(materials[mat]) : (Object.values(materials)[0] || 0);
+
+        const result = createPlatesForGroup(group, availW, availH, allowRotate, plateSetupCost, materialCostPerSheet, costMethod, simDepth);
+        if(result.error){
+          const errDiv = document.createElement('div'); errDiv.style.color='crimson'; errDiv.textContent = `Material "${mat}": ${result.error}`;
+          outputDiv.appendChild(errDiv);
+          continue;
+        }
+        const plates = result.plates;
+
+        let matTotalCost = 0, matTotalPrinted = 0, matTotalWaste = 0, matWasteMoney=0;
+        const plateDetails = [];
+
+        for(const plate of plates){
+          const S = plate.runQty;
+          const totalPositions = plate.pages.reduce((s,p)=>s + p.positions, 0);
+          const printedImpressions = S * totalPositions;
+          const wasteImpressions = plate.pages.reduce((s,p)=> s + (S * p.positions - p.assigned), 0);
+          const inkCostForPlate = plate.inkCostForPlate !== undefined ? plate.inkCostForPlate :
+            plate.pages.reduce((s,p)=> s + (S * p.positions * (p.ink || 0)), 0);
+          const materialCostForPlate = plate.materialCostForPlate !== undefined ? plate.materialCostForPlate : materialCostPerSheet * S;
+          const plateCostTotal = (plate.plateTotalCost !== undefined) ? plate.plateTotalCost : (plateSetupCost + materialCostForPlate + inkCostForPlate);
+
+          // compute waste money breakdown
+          const assignedInkCost = plate.pages.reduce((s,p)=> s + (p.assigned * (p.ink || 0)), 0);
+          const wasteInkCost = Math.max(0, inkCostForPlate - assignedInkCost);
+          const wasteMaterialCost = materialCostForPlate * (wasteImpressions / Math.max(1, printedImpressions));
+          const wasteTotalCostPlate = wasteInkCost + wasteMaterialCost;
+          const wastePerSheet = wasteTotalCostPlate / Math.max(1, S);
+
+          matTotalCost += plateCostTotal;
+          matTotalPrinted += printedImpressions;
+          matTotalWaste += wasteImpressions;
+          matWasteMoney += wasteTotalCostPlate;
+
+          plateDetails.push({ pages: plate.pages.map(x=>({name:x.name, positions:x.positions, qtyAssigned: x.assigned, remBefore: x.remBefore, ink: x.ink })), runQty: S, printedImpressions, waste: wasteImpressions, plateCostTotal, inkCostForPlate, materialCostForPlate, packing: plate.packing, wasteInkCost, wasteMaterialCost, wasteTotalCostPlate, wastePerSheet });
+        }
+
+        const matDiv = document.createElement('div'); matDiv.innerHTML = `<h3>Material: ${mat} — cost per sheet: £${materialCostPerSheet.toFixed(4)}</h3>`;
+        outputDiv.appendChild(matDiv);
+
+        const summary = document.createElement('div'); summary.innerHTML=`<b>Plates:</b> ${plateDetails.length} &nbsp; <b>Total printed impressions:</b> ${matTotalPrinted} &nbsp; <b>Total waste impressions:</b> ${matTotalWaste} &nbsp; <b>Total cost:</b> £${matTotalCost.toFixed(2)} &nbsp; <b>Total wasted money (approx):</b> £${matWasteMoney.toFixed(2)}`;
+        outputDiv.appendChild(summary);
+
+        plateDetails.forEach((p,i)=>{
+          const b = document.createElement('div'); b.style.marginTop='8px';
+          b.innerHTML = `<div style='font-weight:600'>Plate ${i+1} — total positions: ${p.pages.reduce((s,x)=>s+x.positions,0)} — run (sheets): ${p.runQty}</div>
+          <div class='small'>Printed impressions this plate: ${p.printedImpressions} — waste impressions: ${p.waste} — plate cost total: £${p.plateCostTotal.toFixed(2)} (material £${p.materialCostForPlate.toFixed(2)}, ink £${p.inkCostForPlate.toFixed(2)})</div>
+          <div class='small'>Waste cost (approx): £${p.wasteTotalCostPlate.toFixed(4)} — waste ink: £${p.wasteInkCost.toFixed(4)} — waste material: £${p.wasteMaterialCost.toFixed(4)} — waste per sheet: £${p.wastePerSheet.toFixed(4)}</div>
+          <div class='small'>Pages on plate: ${p.pages.map(x=>`${x.name} (pos:${x.positions}, assigned:${x.qtyAssigned}, ink:${(x.ink||0).toFixed(4)})`).join(', ')}</div>`;
+
+          const canvas = document.createElement('canvas');
+          canvas.className = 'plate-canvas';
+          const scale = Math.min(1, 300 / plateW, 300 / plateH);
+          canvas.width = plateW * scale;
+          canvas.height = plateH * scale;
+          b.appendChild(canvas);
+          drawPlate(canvas, plateW, plateH, bleedLeft, bleedRight, bleedTop, bleedBottom, p.packing, scale);
+          outputDiv.appendChild(b);
+        });
+
+        grandTotalCost += matTotalCost;
+        grandTotalPrintedImpressions += matTotalPrinted;
+        grandTotalWaste += matTotalWaste;
+        grandTotalPlates += plateDetails.length;
+        grandWasteMoney += matWasteMoney;
+
+        outputDiv.appendChild(document.createElement('hr'));
+      }
+
+      const overall = document.createElement('div'); overall.innerHTML = `<h3>Overall</h3><div class='small'><b>Plates:</b> ${grandTotalPlates} &nbsp; <b>Total printed impressions:</b> ${grandTotalPrintedImpressions} &nbsp; <b>Total waste impressions:</b> ${grandTotalWaste} &nbsp; <b>Total cost:</b> £${grandTotalCost.toFixed(2)} &nbsp; <b>Total wasted money (approx):</b> £${grandWasteMoney.toFixed(2)}</div>`;
+      outputDiv.appendChild(overall);
+      status.textContent = 'Optimisation completed.';
+    }
+
+    // ---- Drawing function (unchanged) ----
+    function drawPlate(canvas, plateW, plateH, bleedLeft, bleedRight, bleedTop, bleedBottom, packing, scale) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#f0f0f0';
+      ctx.fillRect(0, 0, plateW * scale, plateH * scale);
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, 0, plateW * scale, plateH * scale);
+
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.06)';
+      ctx.fillRect(bleedLeft * scale, bleedTop * scale, 
+                   (plateW - bleedLeft - bleedRight) * scale, 
+                   (plateH - bleedTop - bleedBottom) * scale);
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bleedLeft * scale, bleedTop * scale, 
+                     (plateW - bleedLeft - bleedRight) * scale, 
+                     (plateH - bleedTop - bleedBottom) * scale);
+      
+      ctx.font = `italic ${8 * scale}px sans-serif`;
+      ctx.fillStyle = 'red';
+      ctx.fillText('Usable Area (Bleed Margins)', (bleedLeft + 5) * scale, (bleedTop + 15) * scale);
+
+      if(!packing) return;
+
+      packing.forEach((page, index) => {
+        const x = (bleedLeft + page.x) * scale;
+        const y = (bleedTop + page.y) * scale;
+        const w = page.w * scale;
+        const h = page.h * scale;
+
+        ctx.fillStyle = `hsl(${(index * 70) % 360}, 70%, 80%)`;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x, y, w, h);
+
+        ctx.font = `${20 * scale}px sans-serif`;
+        ctx.fillStyle = '#333';
+        const textX = x + 5 * scale;
+        const textY = y + 15 * scale;
+        ctx.fillText(page.name, textX, textY);
+        //ctx.font = `${16 * scale}px sans-serif`;
+        //ctx.fillText(`${(page.w / scale).toFixed(1)}x${(page.h / scale).toFixed(1)}${page.rotated ? ' (R)' : ''}`, textX, textY + 12 * scale);
+      });
+    }
+  </script>
+</body>
+</html>
